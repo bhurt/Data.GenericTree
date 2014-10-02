@@ -8,6 +8,7 @@ module Data.GenericTree(
     triple,
     appendElement,
     prependElement,
+    count,
     search,
     insert,
     treeConcat,
@@ -193,7 +194,7 @@ insert f x (Three a b c) =
             case f a x of
                 LT -> Branch 4 (Two a x) b (One c)
                 EQ -> Three x b c
-                GT -> BRanch 4 (Two x a) b (One c)
+                GT -> Branch 4 (Two x a) b (One c)
 insert f x (Branch w l a r) =
     case f a x of
         LT -> makeTree l a (insert f x r)
@@ -256,7 +257,7 @@ delete f t@(Three a b c) =
 delete f (Branch _ l x r) =
     case f x of
         LT -> makeTree (delete f l) x r
-        EQ -> append l r
+        EQ -> treeConcat l r
         GT -> makeTree l x (delete f r)
 
 type Prepender a = [ Digit a ]
@@ -294,7 +295,7 @@ type Appender a = [ Tigid a ]
 
 data Tigid a =
     TEno (Tree a) a
-    TOwt (Tree a) a (Tree a) a
+    | TOwt (Tree a) a (Tree a) a
 
 emptyAppender :: Appender a
 emptyAppender = []
@@ -306,19 +307,19 @@ toAppender = loop []
         loop a (One x) = TEno Empty x : a
         loop a (Two x y) = TOwt Empty x Empty y : a
         loop a (Three x y z) = TOwt Empty x (One y) z : a
-        loop a (Branch l x r) = loop (TEno l x : a) r
+        loop a (Branch _ l x r) = loop (TEno l x : a) r
 
 fromAppender :: Appender a -> Tree a
 fromAppender = Data.List.foldl' f Empty
     where
-        f r (TEno l x) = makeBranch l x r
-        f r (TOwt l x m y) = makeBranch l x (makeBranch m y r)
+        f r (TEno l x) = makeTree l x r
+        f r (TOwt l x m y) = makeTree l x (makeTree m y r)
 
 appending :: Appender a -> a -> Appender a
 appending ap x = loop ap Empty x
     where
         loop [] l x = [ TEno l x ]
         loop (TEno l x : p) m y = TOwt l x m y : p
-        loop (TOwn l x m y : p) r z = TEno r z : loop p (makeBranch l x m) y
+        loop (TOwt l x m y : p) r z = TEno r z : loop p (makeTree l x m) y
 
 
