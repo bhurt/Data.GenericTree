@@ -98,7 +98,6 @@ module Data.GenericTree(
 
     -- ** Fast Prepending
     Prepender,
-    Digit,
     emptyPrepender,
     toPrepender,
     fromPrepender,
@@ -106,7 +105,6 @@ module Data.GenericTree(
 
     -- ** Fast Appending
     Appender,
-    Tigid,
     emptyAppender,
     toAppender,
     fromAppender,
@@ -163,6 +161,7 @@ ith (Branch w l x r) i
         n = count l
 ith _ _ = Nothing
 
+{-| Get the first element of a tree. -}
 firstElement :: Tree a -> Maybe a
 firstElement Empty = Nothing
 firstElement (One x) = Just x
@@ -170,6 +169,7 @@ firstElement (Two x _) = Just x
 firstElement (Three x _ _) = Just x
 firstElement (Branch _ l _ _) = firstElement l
 
+{-| Get the last element of a tree. -}
 lastElement :: Tree a -> Maybe a
 lastElement Empty = Nothing
 lastElement (One x) = Just x
@@ -177,6 +177,19 @@ lastElement (Two _ y) = Just y
 lastElement (Three _ _ z) = Just z
 lastElement (Branch _ _ _ r) = lastElement r
 
+{-| Deconstruct the tree.
+
+This is the poor man's view.  It allows for a generic pattern matching
+of a tree without having to export the internals of the tree.
+
+The call @view f b t@ will call @f@ if the tree is not empty, with
+the left and right subtrees and the root element.  If the tree is empty,
+the value @b@ is returned instead.  This works like the code:
+
+> view f _ (Branch l x r) = f l x r
+> view _ b Empty = b
+
+-}
 view :: (Tree a -> a -> Tree a -> b) -> b -> Tree a -> b
 view f _ (Branch _ l x r) = f l x r
 view f g Empty = g
@@ -184,15 +197,19 @@ view f _ (One x) = f Empty x Empty
 view f _ (Two x y) = f Empty x (One y)
 view f _ (Three x y z) = f (One x) y (One z)
 
+{-| The empty tree. -}
 empty :: Tree a
 empty = Empty
 
+{-| Construct a tree with a single element. -}
 singleton :: a -> Tree a
 singleton = One
 
+{-| Construct a tree with two elements. -}
 pair :: a -> a -> Tree a
 pair = Two
 
+{-| Construct a tree with three elements. -}
 triple :: a -> a -> a -> Tree a
 triple = Three
 
@@ -217,6 +234,7 @@ maybeRotateRight r@(Branch _ a m b)
     | count a > count b = rotateRight a m b
 maybeRotateRight r = r
 
+{-| Append an element to the end of the tree. -}
 appendElement :: Tree a -> a -> Tree a
 appendElement Empty a = One a
 appendElement (One a) b = Two a b
@@ -224,6 +242,7 @@ appendElement (Two a b) c = Three a b c
 appendElement (Three a b c) d = Branch 4 (Two a b) c (One d)
 appendElement (Branch _ l a r) b = makeTree l a (appendElement r b)
 
+{-| Prepend an element to the begining of the tree. -}
 prependElement :: a -> Tree a -> Tree a
 prependElement a Empty = One a
 prependElement a (One b) = Two a b
@@ -231,6 +250,14 @@ prependElement a (Two b c) = Three a b c
 prependElement a (Three b c d) = Branch 4 (Two a b) c (One d)
 prependElement a (Branch _ l b r) = makeTree (prependElement a l) b r
 
+{-| Make a tree, given the left and right subtrees and the root element.
+
+This function is used to rebuild a tree after adding or removing one
+element from one of the subtrees.  It assumes that the two trees are
+close to the same weight- i.e. that they are within one element added
+or removed from one or the other element from a balanced tree.  To
+combine trees that may be radically different sizes, use treeConcat.
+-}
 makeTree :: Tree a -> a -> Tree a -> Tree a
 makeTree Empty x Empty = One x
 makeTree (One x) y Empty = Two x y
@@ -255,6 +282,10 @@ makeTree l x r
         lw = count l
         rw = count r
 
+{-| Search the tree.
+
+Assumes an ordered tree.
+-}
 search :: (a -> Ordering) -> Tree a -> Maybe a
 search _ Empty = Nothing
 search f (One a) =
@@ -290,7 +321,10 @@ search f (Branch _ l a r) =
         EQ -> Just a
         GT -> search f r
 
+{-| Insert an element into the tree.
 
+Assumes an ordered tree.
+-}
 insert :: (a -> a -> Ordering) -> a -> Tree a -> Tree a
 insert _ x Empty = One x
 insert f x (One a) =
@@ -327,6 +361,11 @@ insert f x (Branch w l a r) =
         GT -> makeTree (insert f x l) a r
 
 
+{-| Remove the first element from the tree.
+
+Returns the tree with the first element removed, and the element removed.
+If the tree is empty, returns Nothing.
+-}
 removeFirst :: Tree a -> Maybe (a, Tree a)
 removeFirst Empty = Nothing
 removeFirst (One x) = Just (x, Empty)
@@ -337,6 +376,11 @@ removeFirst (Branch _ l x r) =
         Just (y, l') -> Just (y, makeTree l' x r)
         Nothing -> Just (x, r) -- should not happen
 
+{-| Removes the last element from the tree.
+
+Returns the tree with the last element removed, and the element removed.
+If the tree is empty, returns Nothing.
+-}
 removeLast :: Tree a -> Maybe (Tree a, a)
 removeLast Empty = Nothing
 removeLast (One x) = Just (Empty, x)
@@ -347,6 +391,10 @@ removeLast (Branch _ l x r) =
         Just (r', z) -> Just (makeTree l x r', z)
         Nothing -> Just (l, x) -- should not happen
 
+{-| Concatenates two trees.
+
+The trees may be radically different sizes.
+-}
 treeConcat :: Tree a -> Tree a -> Tree a
 treeConcat Empty y = y
 treeConcat x Empty = x
@@ -368,6 +416,10 @@ treeConcat l r
         appendRight (Branch _ rl rx rr) = makeTree (treeConcat l rl) rx rr
         appendRight _ = error "Unreachable code reached."
 
+{-| Deletes an element from the tree.
+
+Assumes an ordered tree.
+-}
 delete :: (a -> Ordering) -> Tree a -> Tree a
 delete _ Empty = Empty
 delete f t@(One a) =
@@ -403,17 +455,20 @@ delete f (Branch _ l x r) =
         EQ -> treeConcat l r
         GT -> makeTree l x (delete f r)
 
-type Prepender a = [ Digit a ]
+{-| The data structure allowing for fast prepending (adding elements
+to the begining of the tree).
+-} 
+data Prepender a = Prepender [ Digit a ]
 
 data Digit a =
     DOne a (Tree a)
     | DTwo a (Tree a) a (Tree a)
 
 emptyPrepender :: Prepender a
-emptyPrepender = []
+emptyPrepender = Prepender []
 
 toPrepender :: Tree a -> Prepender a
-toPrepender tree = loop tree []
+toPrepender tree = Prepender $ loop tree []
     where
         loop Empty p = p
         loop (Branch _ l x r) p = loop l (DOne x r : p)
@@ -422,29 +477,29 @@ toPrepender tree = loop tree []
         loop (Three a b c) p = DTwo a Empty b (One c) : p
 
 fromPrepender :: Prepender a -> Tree a
-fromPrepender = Data.List.foldl' f Empty
+fromPrepender (Prepender lst) = Data.List.foldl' f Empty lst
     where
         f l (DOne x r) = makeTree l x r
         f l (DTwo x m y r) = makeTree (makeTree l x m) y r
 
 prepending :: a -> Prepender a -> Prepender a
-prepending x = loop x Empty
+prepending x (Prepender lst) = Prepender $ loop x Empty lst
     where
         loop a l (DOne b r : p) = DTwo a l b r : p
         loop a l (DTwo b m c r : p) = DOne a l : loop b (makeTree m c r) p
         loop a l [] = [ DOne a l ]
 
-type Appender a = [ Tigid a ]
+data Appender a = Appender [ Tigid a ]
 
 data Tigid a =
     TEno (Tree a) a
     | TOwt (Tree a) a (Tree a) a
 
 emptyAppender :: Appender a
-emptyAppender = []
+emptyAppender = Appender []
 
 toAppender :: Tree a -> Appender a
-toAppender = loop []
+toAppender t = Appender $ loop [] t
     where
         loop a Empty = a
         loop a (One x) = TEno Empty x : a
@@ -453,13 +508,13 @@ toAppender = loop []
         loop a (Branch _ l x r) = loop (TEno l x : a) r
 
 fromAppender :: Appender a -> Tree a
-fromAppender = Data.List.foldl' f Empty
+fromAppender (Appender lst) = Data.List.foldl' f Empty lst
     where
         f r (TEno l x) = makeTree l x r
         f r (TOwt l x m y) = makeTree l x (makeTree m y r)
 
 appending :: Appender a -> a -> Appender a
-appending ap = loop ap Empty
+appending (Appender ap) e = Appender $ loop ap Empty e
     where
         loop [] l x = [ TEno l x ]
         loop (TEno l x : p) m y = TOwt l x m y : p
