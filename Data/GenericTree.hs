@@ -464,9 +464,11 @@ data Digit a =
     DOne a (Tree a)
     | DTwo a (Tree a) a (Tree a)
 
+{-| Create an empty prepender. -}
 emptyPrepender :: Prepender a
 emptyPrepender = Prepender []
 
+{-| Convert a tree into a prepender. -}
 toPrepender :: Tree a -> Prepender a
 toPrepender tree = Prepender $ loop tree []
     where
@@ -476,12 +478,19 @@ toPrepender tree = Prepender $ loop tree []
         loop (Two a b) p = DTwo a Empty b Empty : p
         loop (Three a b c) p = DTwo a Empty b (One c) : p
 
+{-| Convert a prepender into a tree. -}
 fromPrepender :: Prepender a -> Tree a
 fromPrepender (Prepender lst) = Data.List.foldl' f Empty lst
     where
         f l (DOne x r) = makeTree l x r
         f l (DTwo x m y r) = makeTree (makeTree l x m) y r
 
+{-| Prepend an element onto the prepender.
+
+This has O(1) amoritized cost (O(log N) worst-case), and thus is
+faster than calling prependElement.  It is designed to be used with
+backticks, like: @x `prepending` p@.
+-}
 prepending :: a -> Prepender a -> Prepender a
 prepending x (Prepender lst) = Prepender $ loop x Empty lst
     where
@@ -489,15 +498,23 @@ prepending x (Prepender lst) = Prepender $ loop x Empty lst
         loop a l (DTwo b m c r : p) = DOne a l : loop b (makeTree m c r) p
         loop a l [] = [ DOne a l ]
 
+{-| The data structure for allowing fast appending (adding elements to
+the end of the tree) -}
 data Appender a = Appender [ Tigid a ]
 
+{- Tigid is Digit spelled backwards, and Eno and Owt are One and Two
+spelled backwards- indicating that these are backwards digits.  Seriously,
+I'm so funny I kill myself.
+-}
 data Tigid a =
     TEno (Tree a) a
     | TOwt (Tree a) a (Tree a) a
 
+{-| Create an empty appender. -}
 emptyAppender :: Appender a
 emptyAppender = Appender []
 
+{-| Convert a tree to an appender. -}
 toAppender :: Tree a -> Appender a
 toAppender t = Appender $ loop [] t
     where
@@ -507,12 +524,19 @@ toAppender t = Appender $ loop [] t
         loop a (Three x y z) = TOwt Empty x (One y) z : a
         loop a (Branch _ l x r) = loop (TEno l x : a) r
 
+{-| Convert an appender to a tree. -}
 fromAppender :: Appender a -> Tree a
 fromAppender (Appender lst) = Data.List.foldl' f Empty lst
     where
         f r (TEno l x) = makeTree l x r
         f r (TOwt l x m y) = makeTree l x (makeTree m y r)
 
+{-| Append an element to the appender.
+
+This has O(1) amoritized cost (O(log N) worst-case), making it faster
+than appendElement.  It is designed to work with backticks, like:
+@ap `appending` elem@.
+-}
 appending :: Appender a -> a -> Appender a
 appending (Appender ap) e = Appender $ loop ap Empty e
     where
@@ -520,7 +544,7 @@ appending (Appender ap) e = Appender $ loop ap Empty e
         loop (TEno l x : p) m y = TOwt l x m y : p
         loop (TOwt l x m y : p) r z = TEno r z : loop p (makeTree l x m) y
 
-
+{-| Convert a tree to an in-order list of elements. -}
 toList :: Tree a -> [a]
 toList = loop []
     where
@@ -530,5 +554,6 @@ toList = loop []
         loop t (Three a b c) = a : b : c : t
         loop t (Branch _ l x r) = loop (x : loop t r) l
 
+{-| Convert a list of in-order elements into a tree. -}
 fromList :: [a] -> Tree a
 fromList = fromAppender . Data.List.foldl' appending emptyAppender
